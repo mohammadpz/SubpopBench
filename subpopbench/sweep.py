@@ -53,7 +53,7 @@ class Job:
         return f'{self.state}: {self.output_dir} {job_info}'
 
     @staticmethod
-    def launch(jobs, launcher_fn):
+    def launch(args, jobs, launcher_fn):
         print('Launching...')
         jobs = jobs.copy()
         np.random.shuffle(jobs)
@@ -61,7 +61,10 @@ class Job:
         for job in tqdm.tqdm(jobs, leave=False):
             os.makedirs(job.output_dir, exist_ok=True)
         commands = [job.command_str for job in jobs]
-        if launcher_fn.__code__.co_argcount > 1:
+        if launcher_fn.__name__ == 'submitit_launcher':
+            args_list = [job.train_args for job in jobs]
+            launcher_fn(args, args_list)
+        elif launcher_fn.__code__.co_argcount > 1:
             launcher_fn(commands, [job.output_dir for job in jobs], max_slurm_jobs=args.max_slurm_jobs)
         else:
             launcher_fn(commands)
@@ -170,7 +173,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run a sweep')
     # pass through commands / change here each run
     parser.add_argument('command', choices=['launch', 'delete_incomplete', 'delete_all'])
-    parser.add_argument('--command_launcher', type=str, default='multi_gpu')
+    parser.add_argument('--command_launcher', type=str, default='submitit')
     parser.add_argument('--output_folder_name', type=str, required=True)
     parser.add_argument('--dataset', nargs='+', type=str, default=DATASETS)
     parser.add_argument('--algorithms', nargs='+', type=str, default=algorithms.ALGORITHMS)
@@ -198,6 +201,8 @@ if __name__ == "__main__":
     # slurm launcher
     parser.add_argument('--slurm_pre', type=str, default=None)
     parser.add_argument('--max_slurm_jobs', type=int, default=15)
+    parser.add_argument('--slurm_partition', type=str, default="devlab")
+    parser.add_argument('--slurm_dir', type=str, default="/checkpoint/mpezeshki/submitit")
     args = parser.parse_args()
 
     args_list = make_args_list(
@@ -245,7 +250,7 @@ if __name__ == "__main__":
         if not args.skip_confirmation:
             ask_for_confirmation()
         launcher_fn = command_launchers.REGISTRY[args.command_launcher]
-        Job.launch(to_launch, launcher_fn)
+        Job.launch(args, to_launch, launcher_fn)
 
     elif args.command == 'delete_incomplete':
         to_delete = [j for j in jobs if j.state == Job.INCOMPLETE]

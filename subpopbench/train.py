@@ -21,7 +21,7 @@ from subpopbench.utils import misc, eval_helper
 from subpopbench.dataset.fast_dataloader import InfiniteDataLoader, FastDataLoader
 
 
-if __name__ == "__main__":
+def get_default_parser(args=None):
     parser = argparse.ArgumentParser(description='Subpopulation Shift Benchmark')
     # training
     parser.add_argument('--dataset', type=str, default="Waterbirds", choices=datasets.DATASETS)
@@ -62,8 +62,11 @@ if __name__ == "__main__":
     parser.add_argument('--text_arch', default='bert-base-uncased',
                         choices=['bert-base-uncased', 'gpt2', 'xlm-roberta-base',
                                  'allenai/scibert_scivocab_uncased', 'distilbert-base-uncased'])
-    args = parser.parse_args()
 
+    return parser
+
+
+def run_experiment(args):
     start_step = 0
     store_prefix = f"{args.dataset}_{args.cmnist_label_prob}_{args.cmnist_attr_prob}_{args.cmnist_spur_prob}" \
                    f"_{args.cmnist_flip_prob}" if args.dataset == "CMNIST" else args.dataset
@@ -344,3 +347,8 @@ if __name__ == "__main__":
 
     with open(os.path.join(args.output_dir, 'done'), 'w') as f:
         f.write('done')
+
+
+if __name__ == "__main__":
+    args = get_default_parser().parse_args()
+    run_experiment(args)
