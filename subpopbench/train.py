@@ -27,7 +27,7 @@ def get_default_parser(args=None):
     parser.add_argument('--dataset', type=str, default="Waterbirds", choices=datasets.DATASETS)
     parser.add_argument('--algorithm', type=str, default="ERM", choices=algorithms.ALGORITHMS)
     parser.add_argument('--output_folder_name', type=str, default='debug')
-    parser.add_argument('--train_attr', type=str, default="yes", choices=['yes', 'no'])
+    parser.add_argument('--train_attr', type=str, default="yes")
     # others
     parser.add_argument('--data_dir', type=str, default="./data")
     parser.add_argument('--output_dir', type=str, default="./output")
@@ -47,7 +47,7 @@ def get_default_parser(args=None):
     # checkpoints
     parser.add_argument('--resume', '-r', type=str, default='')
     parser.add_argument('--pretrained', type=str, default='')
-    parser.add_argument('--checkpoint_freq', type=int, default=None, help='Checkpoint every N steps')
+    parser.add_argument('--checkpoint_freq', type=int, default=25,                                    help='Checkpoint every N steps')
     parser.add_argument('--skip_model_save', action='store_true')
     # CMNIST data params
     parser.add_argument('--cmnist_label_prob', type=float, default=0.5)
@@ -71,7 +71,12 @@ def run_experiment(args):
     store_prefix = f"{args.dataset}_{args.cmnist_label_prob}_{args.cmnist_attr_prob}_{args.cmnist_spur_prob}" \
                    f"_{args.cmnist_flip_prob}" if args.dataset == "CMNIST" else args.dataset
     args.store_name = f"{store_prefix}_{args.algorithm}_hparams{args.hparams_seed}_seed{args.seed}"
-    args.output_folder_name += "_attrYes" if args.train_attr == 'yes' else "_attrNo"
+    if args.train_attr == 'yes':
+        args.output_folder_name += "_attrYes"
+    elif args.train_attr == 'no':
+        args.output_folder_name += "_attrNo"
+    else:
+        args.output_folder_name += "_INFERRED_" + args.train_attr.split('/')[-1].strip('.pt')
 
     misc.prepare_folders(args)
     args.output_dir = os.path.join(args.output_dir, args.output_folder_name, args.store_name)
@@ -129,8 +134,9 @@ def run_experiment(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if args.dataset in vars(datasets):
+        # train_attr now affects both training and validation
         train_dataset = vars(datasets)[args.dataset](args.data_dir, 'tr', hparams, train_attr=args.train_attr)
-        val_dataset = vars(datasets)[args.dataset](args.data_dir, 'va', hparams)
+        val_dataset = vars(datasets)[args.dataset](args.data_dir, 'va', hparams, train_attr=args.train_attr)
         test_dataset = vars(datasets)[args.dataset](args.data_dir, 'te', hparams)
     else:
         raise NotImplementedError
@@ -150,7 +156,7 @@ def run_experiment(args):
     hparams.update({
         "steps": n_steps
     })
-    print(f"Dataset:\n\t[train]\t{len(train_dataset)} (with{'' if args.train_attr == 'yes' else 'out'} attributes)"
+    print(f"Dataset:\n\t[train]\t{len(train_dataset)} (with{'' if args.train_attr == 'yes' else 'out'} ground-truth attributes)"
           f"\n\t[val]\t{len(val_dataset)}\n\t[test]\t{len(test_dataset)}")
 
     if hparams['group_balanced']:
@@ -167,11 +173,16 @@ def run_experiment(args):
         num_workers=num_workers
     )
     split_names = ['va'] + vars(datasets)[args.dataset].EVAL_SPLITS
+    # #################################
+    # Even for eval loaders we make sure that tr and va use inferred attrs
+    # #################################
     eval_loaders = [FastDataLoader(
         dataset=dset,
         batch_size=max(128, hparams['batch_size'] * 2),
         num_workers=num_workers)
-        for dset in [vars(datasets)[args.dataset](args.data_dir, split, hparams) for split in split_names]
+        for dset in [vars(datasets)[args.dataset](
+            args.data_dir, split, hparams, train_attr={
+                'tr': args.train_attr, 'va': args.train_attr, 'te': 'yes'}[split]) for split in split_names]
     ]
 
     algorithm_class = algorithms.get_algorithm_class(args.algorithm)

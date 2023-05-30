@@ -63,6 +63,30 @@ class Job:
         commands = [job.command_str for job in jobs]
         if launcher_fn.__name__ == 'submitit_launcher':
             args_list = [job.train_args for job in jobs]
+
+            # ###################################################
+            import glob
+            args_ = args_list[0].copy()
+            # import sys; sys.stdout = sys.__stdout__; import ipdb; ipdb.set_trace()
+
+            folder = args_['res_dir']
+            hparams_seed = {'Waterbirds+GroupDRO': 0,
+                            'Waterbirds+CBLoss': 0,
+                            'CelebA+GroupDRO': 13,
+                            'CelebA+CBLoss': 4,
+                            'MultiNLI+GroupDRO': 13,
+                            'MultiNLI+CBLoss': 0}[args_['dataset'] + '+' + args_['algorithm']]
+
+            args_list = []
+            files = glob.glob('../cross-mistake-learning/' + folder + '/*.pt')
+            np.random.shuffle(files)
+            for file in ['yes'] + files[:400]:
+                exp = args_.copy()
+                exp['train_attr'] = file
+                exp['hparams_seed'] = hparams_seed
+                args_list += [exp]
+            # ###################################################
+
             launcher_fn(args, args_list)
         elif launcher_fn.__code__.co_argcount > 1:
             launcher_fn(commands, [job.output_dir for job in jobs], max_slurm_jobs=args.max_slurm_jobs)
@@ -96,7 +120,7 @@ def load_best_hparams(all_records, dataset, algo):
 
 
 def make_args_list(n_trials, dataset_names, algorithms, train_attr, n_hparams_from, n_hparams, steps,
-                   image_arch, text_arch, stage1_folder, stage1_algo, output_folder_name, hparams):
+                   image_arch, text_arch, stage1_folder, stage1_algo, output_folder_name, hparams, output_dir, res_dir):
     args_list = []
     for trial_seed in range(n_trials):
         for dataset in dataset_names:
@@ -122,6 +146,8 @@ def make_args_list(n_trials, dataset_names, algorithms, train_attr, n_hparams_fr
                         train_args['steps'] = steps
                     if hparams is not None:
                         train_args['hparams'] = hparams
+                    train_args['res_dir'] = res_dir
+                    train_args['output_dir'] = output_dir
                     args_list.append(train_args)
     return args_list
 
@@ -177,7 +203,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_folder_name', type=str, required=True)
     parser.add_argument('--dataset', nargs='+', type=str, default=DATASETS)
     parser.add_argument('--algorithms', nargs='+', type=str, default=algorithms.ALGORITHMS)
-    parser.add_argument('--train_attr', type=str, default='yes', choices=['yes', 'no'])
+    parser.add_argument('--train_attr', type=str, default='yes')
     # sweep with best hparam, different seeds
     parser.add_argument('--best_hp', action='store_true')
     parser.add_argument('--input_folder', type=str, default='vanilla')
@@ -195,6 +221,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_hparams', type=int, default=16)
     parser.add_argument('--data_dir', type=str, default="./data")
     parser.add_argument('--output_dir', type=str, default="./output")
+    parser.add_argument('--res_dir', type=str, default=None)
     parser.add_argument('--steps', type=int, default=None)
     parser.add_argument('--hparams', type=str, default=None)
     parser.add_argument('--skip_confirmation', action='store_true')
@@ -218,7 +245,9 @@ if __name__ == "__main__":
         stage1_folder=args.stage1_folder,
         stage1_algo=args.stage1_algo,
         output_folder_name=args.output_folder_name,
-        hparams=args.hparams
+        hparams=args.hparams,
+        output_dir=args.output_dir,
+        res_dir=args.res_dir
     ) if not args.best_hp else make_best_hp_args_list(
         n_trials=args.n_trials,
         dataset_names=args.dataset,

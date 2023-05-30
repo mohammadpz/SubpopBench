@@ -26,6 +26,7 @@ def predict_on_set(algorithm, loader, device):
             ys.append(y)
             atts.append(a)
             gs.append([f'y={yi},a={gi}' for c, (yi, gi) in enumerate(zip(y, a))])
+    algorithm.train()
 
     return np.concatenate(ys, axis=0), np.concatenate(atts, axis=0), np.concatenate(ps, axis=0), np.concatenate(gs)
 
@@ -136,7 +137,7 @@ def prob_metrics(targets, preds, label_set, return_arrays=False):
     except:
         res['AUROC'] = roc_auc_score(targets, preds, multi_class='ovo', labels=label_set)
 
-    if len(set(targets)) == 2:
+    if (len(set(targets)) == 2) and (np.max(targets) == 1):
         res['AUPRC'] = average_precision_score(targets, preds, average='macro')
         res['brier'] = brier_score_loss(targets, preds)
 

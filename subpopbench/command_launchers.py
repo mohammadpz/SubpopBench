@@ -72,6 +72,8 @@ def submitit_launcher(args, args_list):
         args_copy.update(args_)
         args_list[i] = argparse.Namespace(**args_copy)
 
+    # run_experiment(args_list[-1])                                       
+
     executor = submitit.SlurmExecutor(folder=args.slurm_dir)
     executor.update_parameters(
         time=24 * 60,

@@ -63,7 +63,12 @@ class SubpopDataset:
         self.idx = list(range(len(df)))
         self.x = df["filename"].astype(str).map(lambda x: os.path.join(root, x)).tolist()
         self.y = df["y"].tolist()
-        self.a = df["a"].tolist() if train_attr == 'yes' else [0] * len(df["a"].tolist())
+        if train_attr == 'yes':
+            self.a = df["a"].tolist()
+        elif train_attr == 'no':
+            self.a = [0] * len(df["a"].tolist())
+        else:
+            self.a = torch.load(train_attr)[split]['m_hat'].squeeze().tolist()
         self.transform_ = transform
         self._count_groups()
 
